@@ -10,6 +10,9 @@ import org.apache.lucene.index.IndexReader;
 import org.apache.lucene.index.IndexWriter;
 import org.apache.lucene.index.IndexWriter.MaxFieldLength;
 import org.apache.lucene.index.Term;
+import org.apache.lucene.search.IndexSearcher;
+import org.apache.lucene.search.Query;
+import org.apache.lucene.search.TermQuery;
 import org.apache.lucene.store.Directory;
 import org.apache.lucene.store.RAMDirectory;
 import org.junit.jupiter.api.Assertions;
@@ -42,6 +45,15 @@ public class IndexingTest {
 
     private IndexWriter getWriter() throws IOException {
         return new IndexWriter(directory, new WhitespaceAnalyzer(), MaxFieldLength.UNLIMITED);
+    }
+
+    protected int getHitCount(String fieldName, String searchString) throws IOException {
+        IndexSearcher searcher = new IndexSearcher(directory);
+        Term t = new Term(fieldName, searchString);
+        Query query = new TermQuery(t);
+        int hitCount = TestUtils.hitCount(searcher, query);
+        searcher.close();
+        return hitCount;
     }
 
     @Test
@@ -84,5 +96,23 @@ public class IndexingTest {
         Assertions.assertEquals(1, writer.maxDoc()); // 최적화를 진행했기 때문에 maxDoc 메소드 역시 2 대신 1 값을 리턴
         Assertions.assertEquals(1, writer.numDocs());
         writer.close();
+    }
+
+    @Test
+    @DisplayName("변경 테스트")
+    public void test5() throws IOException {
+        IndexWriter writer = getWriter();
+
+        Document doc = new Document();
+        doc.add(new Field("id", "1", Field.Store.YES, Index.NOT_ANALYZED));
+        doc.add(new Field("country", "Netherlands", Field.Store.YES, Index.NO));
+        doc.add(new Field("contents", "Den Haag has a lot of museums", Store.NO, Index.ANALYZED));
+        doc.add(new Field("city", "Den Haag", Field.Store.YES, Index.ANALYZED));
+
+        writer.updateDocument(new Term("id", "1"), doc);
+        writer.close();
+
+        Assertions.assertEquals(0, getHitCount("city", "Amsterdam"));
+        Assertions.assertEquals(1, getHitCount("city", "Haag"));
     }
 }
